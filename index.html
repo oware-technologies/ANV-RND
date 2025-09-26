@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Textile Supply Chain Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            color: #4b5563;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+        .tab-button.active {
+            color: #3b82f6;
+            border-bottom-color: #3b82f6;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .step-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+            opacity: 0.5;
+            transform: scale(0.98);
+        }
+        .step-card.active {
+            opacity: 1;
+            transform: scale(1);
+            border-color: #3b82f6;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+        }
+        .step-card.completed {
+            opacity: 0.8;
+            background-color: #f9fafb;
+            border-color: #16a34a;
+        }
+        .step-card.completed .status-dot { background-color: #22c55e; }
+        .step-card.active .status-dot { background-color: #3b82f6; animation: pulse 2s infinite; }
+
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50; opacity: 0; visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .modal-overlay.visible { opacity: 1; visibility: visible; }
+        .modal-content {
+            background: white; padding: 2rem; border-radius: 0.75rem;
+            max-width: 500px; width: 90%; transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        .modal-overlay.visible .modal-content { transform: scale(1); }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+        }
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 500;
+            font-size: 0.875rem;
+            text-align: center;
+        }
+        .role-badge {
+            display: inline-block;
+            margin-top: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            background-color: #e5e7eb;
+            color: #4b5563;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800">Vertically Integrated Textile Supply Chain</h1>
+            <p class="text-lg text-gray-600 mt-2">Interactive Simulation Dashboard</p>
+        </header>
+
+        <!-- Product Selection -->
+        <div id="product-selection" class="w-full max-w-4xl mx-auto mb-10 bg-white p-6 rounded-lg shadow-md">
+            <div id="selection-header">
+                <h3 class="font-semibold text-xl text-gray-800 mb-4 text-center">1. Select a Product to Begin</h3>
+                <div class="flex justify-center space-x-4">
+                    <button onclick="startFlow('Queen Size Cotton Bedsheet')" class="bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition-colors shadow">
+                        Queen Size Cotton Bedsheet
+                    </button>
+                    <button onclick="startFlow('King Size Polyester Duvet')" class="bg-teal-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-teal-700 transition-colors shadow">
+                        King Size Polyester Duvet
+                    </button>
+                </div>
+            </div>
+            <div id="reset-section" class="hidden text-center">
+                 <h3 id="current-product-header" class="font-semibold text-xl text-gray-800 mb-4 text-center"></h3>
+                 <button onclick="resetFlow()" class="bg-red-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-red-600 transition-colors shadow">
+                    Reset Simulation
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab Interface -->
+        <div class="w-full max-w-4xl mx-auto bg-white rounded-lg shadow-md">
+            <div class="border-b border-gray-200">
+                <nav class="-mb-px flex space-x-4" aria-label="Tabs">
+                    <button onclick="switchTab('flow')" id="tab-btn-flow" class="tab-button active">Supply Chain Flow</button>
+                    <button onclick="switchTab('inventory')" id="tab-btn-inventory" class="tab-button">Inventory Status</button>
+                </nav>
+            </div>
+            <div class="p-6">
+                <div id="tab-content-flow" class="tab-content active">
+                    <div id="flowchart-container" class="space-y-4 flex flex-col items-center">
+                        <p class="text-gray-500 text-center text-lg">Please select a product to view its supply chain flow.</p>
+                    </div>
+                </div>
+                <div id="tab-content-inventory" class="tab-content">
+                    <div id="inventory-container">
+                        <p class="text-gray-500 text-center text-lg">Select a product to see the inventory details.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Template -->
+    <div id="action-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3 id="modal-title" class="text-2xl font-bold text-gray-800 mb-4">Action Required</h3>
+            <p id="modal-description" class="text-gray-600 mb-6">Details about the action...</p>
+            <div id="modal-buttons" class="flex justify-end space-x-3">
+                <!-- Buttons are dynamically added here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        let inventoryData = {};
+
+        function initializeInventory(product) {
+            if (product.includes('Cotton')) {
+                inventoryData = {
+                    'fg_bedsheet': { name: 'Queen Cotton Bedsheet', status: 'Unavailable', inStock: 0, wip: 0, inTransit: 0, ordered: 0 },
+                    'dyed_fabric': { name: 'Dyed Cotton Fabric', status: 'Unavailable', inStock: 0, wip: 0, inTransit: 0, ordered: 0 },
+                    'grey_fabric': { name: 'Grey Cotton Fabric', status: 'Available', inStock: 250, wip: 50, inTransit: 0, ordered: 0 },
+                    'yarn': { name: 'Cotton Yarn', status: 'Available', inStock: 1200, wip: 0, inTransit: 200, ordered: 0 },
+                    'raw_cotton': { name: 'Raw Cotton Bales', status: 'Unavailable', inStock: 0, wip: 0, inTransit: 0, ordered: 50 },
+                };
+            } else if (product.includes('Polyester')) {
+                inventoryData = {
+                    'fg_duvet': { name: 'King Polyester Duvet', status: 'Unavailable', inStock: 0, wip: 0, inTransit: 0, ordered: 0 },
+                    'poly_fabric_shell': { name: 'Finished Polyester Shell', status: 'Available', inStock: 150, wip: 0, inTransit: 0, ordered: 0 },
+                    'polyfill': { name: 'Polyester Fiberfill', status: 'Available', inStock: 800, wip: 200, inTransit: 0, ordered: 0 },
+                    'grey_poly_fabric': { name: 'Grey Polyester Fabric', status: 'Available', inStock: 2000, wip: 0, inTransit: 500, ordered: 0 },
+                    'dty_yarn': { name: 'Polyester DTY Yarn', status: 'Available', inStock: 3500, wip: 0, inTransit: 0, ordered: 1000 },
+                    'poy_chips': { name: 'POY Polyester Chips', status: 'Available', inStock: 10000, wip: 0, inTransit: 0, ordered: 0 },
+                };
+            }
+        }
+        
+        const flowStepsData = {
+            'Queen Size Cotton Bedsheet': {
+                start: 'order',
+                steps: {
+                    'order': { type: 'start', title: 'Order Received', details: 'A new order has been logged.', nextStep: 'check_fg', role: 'System (Automated)' },
+                    'check_fg': { type: 'action', title: 'Check Finished Goods (FG) Inventory', details: 'System checks stock for Bedsheets.', role: 'Inventory Manager', modal: { 
+                        title: "Decision: Is Bedsheet Stock Available?", 
+                        desc: "Your software queries the inventory. Our sample data shows 0 in stock. You must create a Manufacturing Order.",
+                        buttons: [
+                            { text: "❌ No, Create MO", nextStep: 'create_mo_cut', updates: { item: 'fg_bedsheet', status: 'WIP' } }
+                        ]
+                    }},
+                    'dispatch': { type: 'end', title: 'Dispatch Order', details: 'Order is picked and shipped from the FG Warehouse.', role: 'Warehouse Manager' },
+                    'create_mo_cut': { type: 'action', title: 'Create MO: Cut to Pack', details: 'An MO is needed for the bedsheets.', role: 'Production Planner', nextStep: 'check_fabric', modal: { title: "Action: Generate Cut to Pack MO", desc: "Confirm to generate a Manufacturing Order for the final product." }},
+                    'check_fabric': { type: 'action', title: 'Check Dyed Fabric Inventory', details: 'System checks for dyed cotton fabric.', role: 'Production Planner', nextStep: 'create_mo_dye', updates: { item: 'dyed_fabric', status: 'WIP' }, modal: {
+                         title: "Action: Check Dyed Fabric",
+                         desc: "The MO for cutting requires dyed fabric. The system checks inventory. For this demo, we'll assume it's unavailable to show the full process."
+                    }},
+                    'create_mo_dye': { type: 'action', title: 'Create MO: Dyeing & Finishing', details: 'A Dyeing MO is required.', role: 'Production Planner', nextStep: 'check_grey', modal: { title: "Action: Generate Dyeing MO", desc: "Confirm to generate an MO for the Dyeing Mill." }},
+                    'check_grey': { type: 'action', title: 'Check Grey Fabric Inventory', details: 'System checks for grey fabric.', role: 'Production Planner', nextStep: 'create_mo_weave', updates: {item: 'grey_fabric', status: 'WIP'}, modal: { title: "Action: Check Grey Fabric", desc: "The Dyeing MO requires grey fabric. Sample data shows some in stock, but we'll assume not enough for this order." } },
+                    'create_mo_weave': { type: 'action', title: 'Create MO: Weaving', details: 'A Weaving MO is required.', role: 'Production Planner', nextStep: 'check_yarn', updates: {item: 'yarn', status: 'WIP'}, modal: { title: "Action: Generate Weaving MO", desc: "Confirm to generate an MO for the Weaving Mill." } },
+                    'check_yarn': { type: 'action', title: 'Check Yarn Inventory', details: 'System checks for cotton yarn.', role: 'Production Planner', nextStep: 'create_mo_dty', updates: {item: 'raw_cotton', status: 'WIP'}, modal: { title: "Action: Check Yarn", desc: "The Weaving MO requires cotton yarn. We'll assume not enough is available." } },
+                    'create_mo_dty': { type: 'action', title: 'Create MO: Spinning (Yarn)', details: 'A Spinning MO is required.', role: 'Production Planner', nextStep: 'check_raw', modal: { title: "Action: Generate Spinning MO", desc: "Confirm to generate an MO for the Spinning Mill." } },
+                    'check_raw': { type: 'action', title: 'Check Raw Material Inventory', details: 'System checks for raw cotton.', role: 'Procurement Officer', nextStep: 'create_po', updates: {item: 'raw_cotton', status: 'Ordered'}, modal: { title: "Action: Check Raw Cotton", desc: "The Spinning MO requires raw cotton, which is out of stock. A Purchase Order is required." } },
+                    'create_po': { type: 'action', title: 'Create Purchase Order (PO)', details: 'A PO must be sent to a supplier.', role: 'Procurement Officer', nextStep: 'end_flow_po', modal: { title: "Action: Generate Purchase Order", desc: "Confirm to create a PO for raw cotton." } },
+                    'end_flow_po': { type: 'end', title: 'Procurement Initiated', details: 'The manufacturing cascade will begin once raw materials arrive.', role: 'Procurement Team' }
+                }
+            },
+            'King Size Polyester Duvet': {
+                start: 'order_duvet',
+                steps: {
+                    'order_duvet': { type: 'start', title: 'Order Received: King Duvet', details: 'A new order has been logged.', role: 'System (Automated)', nextStep: 'check_fg_duvet' },
+                    'check_fg_duvet': { type: 'action', title: 'Check Finished Goods (FG) Inventory', details: 'System checks stock for King Polyester Duvets.', role: 'Inventory Manager', modal: {
+                        title: "Decision: Is Duvet Stock Available?",
+                        desc: "Your software queries the inventory. Our sample data shows 0 in stock. You must create a Manufacturing Order.",
+                        buttons: [
+                            { text: "❌ No, Create MO", nextStep: 'create_mo_assembly', updates: { item: 'fg_duvet', status: 'WIP' } }
+                        ]
+                    }},
+                    'dispatch_duvet': { type: 'end', title: 'Dispatch Duvet Order', details: 'Order is picked and shipped from the FG Warehouse.', role: 'Warehouse Manager' },
+                    'create_mo_assembly': { type: 'action', title: 'Create MO: Final Assembly', details: 'An MO is needed to assemble the duvets.', role: 'Production Planner', nextStep: 'check_shell', modal: { title: "Action: Generate Assembly MO", desc: "Confirm to generate an MO to fill and stitch the polyester shells." }},
+                    'check_shell': { type: 'action', title: 'Check Polyester Shell Inventory', details: 'System checks for finished, empty duvet shells.', role: 'Production Planner', modal: {
+                        title: "Decision: Is Shell Fabric Available?",
+                        desc: "The assembly MO requires finished polyester shells. Our sample data shows this is IN STOCK. The production can begin without further procurement.",
+                        buttons: [
+                            { text: "✅ Yes, Stock Available", nextStep: 'end_flow_duvet_assembly' }
+                        ]
+                    }},
+                    'end_flow_duvet_assembly': { type: 'end', title: 'Manufacturing Initiated', details: 'Assembly will begin using the in-stock components.', role: 'Production Team' }
+                }
+            }
+        };
+
+        let currentFlowData = {};
+        let currentStepId = '';
+        let completedSteps = new Set();
+
+        const flowchartContainer = document.getElementById('flowchart-container');
+        const inventoryContainer = document.getElementById('inventory-container');
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById(`tab-btn-${tabName}`).classList.add('active');
+            document.getElementById(`tab-content-${tabName}`).classList.add('active');
+        }
+
+        function startFlow(productName) {
+            initializeInventory(productName);
+            currentFlowData = flowStepsData[productName];
+            const startStepId = currentFlowData.start;
+            const firstActionStepId = currentFlowData.steps[startStepId].nextStep;
+            
+            completedSteps.clear();
+            completedSteps.add(startStepId); // Immediately complete the "Order Received" step
+            currentStepId = firstActionStepId; // Set the current step to the first real action
+            
+            document.getElementById('selection-header').classList.add('hidden');
+            document.getElementById('current-product-header').textContent = `Simulating: ${productName}`;
+            document.getElementById('reset-section').classList.remove('hidden');
+
+            renderFlowchart();
+            renderInventory();
+            updateActiveStep();
+        }
+        
+        function resetFlow() {
+            flowchartContainer.innerHTML = '<p class="text-gray-500 text-center text-lg">Please select a product...</p>';
+            inventoryContainer.innerHTML = '<p class="text-gray-500 text-center text-lg">Select a product...</p>';
+            document.getElementById('selection-header').classList.remove('hidden');
+            document.getElementById('reset-section').classList.add('hidden');
+            currentStepId = '';
+            completedSteps.clear();
+        }
+
+        function renderInventory() {
+            let tableHtml = `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Component</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">In Stock</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">WIP</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">In Transit</th>
+                                <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ordered</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+            `;
+            for (const key in inventoryData) {
+                const item = inventoryData[key];
+                const statusColors = {
+                    'Available': 'bg-green-100 text-green-800',
+                    'Unavailable': 'bg-red-100 text-red-800',
+                    'WIP': 'bg-blue-100 text-blue-800',
+                    'Ordered': 'bg-yellow-100 text-yellow-800',
+                    'In Transit': 'bg-indigo-100 text-indigo-800'
+                };
+                tableHtml += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap"><span class="status-badge ${statusColors[item.status] || 'bg-gray-100 text-gray-800'}">${item.status}</span></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">${item.inStock}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">${item.wip}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">${item.inTransit}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">${item.ordered}</td>
+                    </tr>
+                `;
+            }
+            tableHtml += `</tbody></table></div>`;
+            inventoryContainer.innerHTML = tableHtml;
+        }
+
+        function proceedToStep(completedStepId, nextStepId, updates) {
+            completedSteps.add(completedStepId);
+            currentStepId = nextStepId;
+
+            if (updates) {
+                const item = inventoryData[updates.item];
+                if(item) {
+                    item.status = updates.status;
+                    if(updates.status === 'WIP') item.wip += 1; // Simplified logic
+                    if(updates.status === 'Ordered') item.ordered += 1;
+                }
+                renderInventory();
+            }
+            
+            if (!currentStepId) { 
+                 const lastStepCard = document.getElementById(`step-${completedStepId}`);
+                 if(lastStepCard) {
+                    lastStepCard.classList.add('completed');
+                    lastStepCard.classList.remove('active');
+                 }
+            } else {
+                 updateActiveStep();
+            }
+            closeModal();
+        }
+
+        function openModal(stepId) {
+            const step = currentFlowData.steps[stepId];
+            const modalEl = document.getElementById('action-modal');
+            const modalTitle = modalEl.querySelector('#modal-title');
+            const modalDescription = modalEl.querySelector('#modal-description');
+            const modalButtons = modalEl.querySelector('#modal-buttons');
+
+            modalTitle.textContent = step.modal.title;
+            modalDescription.innerHTML = `<p class="mb-4"><span class="font-semibold">Responsible Role:</span> ${step.role}</p><p>${step.modal.desc}</p>`;
+            modalButtons.innerHTML = ''; 
+
+            if (step.modal.buttons) { 
+                step.modal.buttons.forEach(btn => {
+                    const buttonEl = document.createElement('button');
+                    buttonEl.textContent = btn.text;
+                    buttonEl.className = `text-white font-bold py-2 px-4 rounded-lg transition-colors ${btn.class || 'bg-blue-600 hover:bg-blue-700'}`;
+                    buttonEl.onclick = () => proceedToStep(stepId, btn.nextStep, btn.updates);
+                    modalButtons.appendChild(buttonEl);
+                });
+            } else {
+                const confirmBtn = document.createElement('button');
+                confirmBtn.textContent = 'Confirm Action';
+                confirmBtn.className = 'bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition-colors';
+                confirmBtn.onclick = () => proceedToStep(stepId, step.nextStep, step.updates);
+                modalButtons.appendChild(confirmBtn);
+            }
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.className = 'bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors';
+            cancelBtn.onclick = closeModal;
+            modalButtons.insertBefore(cancelBtn, modalButtons.firstChild);
+
+            modalEl.classList.add('visible');
+        }
+
+        function renderFlowchart() {
+            flowchartContainer.innerHTML = '';
+            const steps = currentFlowData.steps;
+            let count = 0;
+            const stepKeys = Object.keys(steps);
+            for (const stepId of stepKeys) {
+                const step = steps[stepId];
+                const stepElement = createStepElement(step, stepId);
+                flowchartContainer.appendChild(stepElement);
+                if (count < stepKeys.length - 1 && steps[stepKeys[count+1]].type !== 'end') {
+                    const arrow = document.createElement('div');
+                    arrow.className = 'my-2 h-8 w-px bg-gray-300';
+                    flowchartContainer.appendChild(arrow);
+                }
+                count++;
+            }
+        }
+        function createStepElement(step, stepId) {
+             const div = document.createElement('div');
+            div.className = 'step-card w-full max-w-2xl p-4';
+            div.id = `step-${stepId}`;
+            div.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex-grow">
+                        <div class="flex items-center space-x-4">
+                             <span class="status-dot h-3 w-3 rounded-full bg-gray-300 flex-shrink-0"></span>
+                            <div>
+                                <h4 class="font-semibold text-lg text-gray-800">${step.title}</h4>
+                                <p class="text-sm text-gray-600">${step.details}</p>
+                            </div>
+                        </div>
+                        <div class="pl-7 mt-2">
+                             <span class="role-badge">${step.role}</span>
+                        </div>
+                    </div>
+                    ${step.type === 'action' ? `<button onclick="openModal('${stepId}')" class="action-btn bg-blue-500 text-white text-sm font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors flex-shrink-0" disabled>Action</button>` : ''}
+                </div>`;
+            return div;
+        }
+        function updateActiveStep() { 
+            document.querySelectorAll('.step-card').forEach(card => {
+                const stepId = card.id.replace('step-', '');
+                card.classList.remove('active', 'completed');
+                const actionBtn = card.querySelector('.action-btn');
+                if (actionBtn) actionBtn.disabled = true;
+
+                if (completedSteps.has(stepId)) {
+                    card.classList.add('completed');
+                } else if (stepId === currentStepId) {
+                    card.classList.add('active');
+                    if (actionBtn) actionBtn.disabled = false;
+                }
+            });
+        }
+        function closeModal() { document.getElementById('action-modal').classList.remove('visible'); }
+
+    </script>
+</body>
+</html>
